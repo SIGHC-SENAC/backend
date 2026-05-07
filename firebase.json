@@ -13,5 +13,20 @@
       "predeploy": [],
       "source": "functions"
     }
-  ]
+  ],
+  "hosting": {
+    "site": "api-sighc",
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "app"
+      }
+    ]
+  }
 }
