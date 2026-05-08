@@ -63,7 +63,7 @@ export async function listarAdmins(req, res) {
  */
 export async function criarAdmin(req, res) {
   try {
-    const { nome, cursoId, cursoIds } = req.body;
+    const { nome, email, cursoId, cursoIds } = req.body;
     if (!nome || !email) {
       return res.status(400).json({ message: "Campos nome e email são obrigatórios." });
     }

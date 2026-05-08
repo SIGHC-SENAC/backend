@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
+    "adicionar-lendas": "node scripts/adicionarAlunosTads049.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "add": "node scripts/createAdmin.js",
+    "import:tads049": "node scripts/adicionarAlunosTads049.js",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"

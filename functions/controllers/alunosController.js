@@ -97,7 +97,7 @@ await transporter.sendMail({
       
       <!-- Header -->
       <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%); padding: 32px 24px; text-align: center;">
-        <img src="https://pi-3p-tads049.web.app/logo.png" alt="Senac Pernambuco" style="height: 56px; margin-bottom: 12px;" />
+        <img src="https://sighc.com.br/logo.png" alt="Senac Pernambuco" style="height: 56px; margin-bottom: 12px;" />
         <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin: 0;">Sistema Acadêmico de Horas Complementares</p>
       </div>
 
@@ -129,7 +129,7 @@ await transporter.sendMail({
 
         <!-- CTA Button -->
         <div style="text-align: center; margin: 0 0 8px;">
-          <a href="https://pi-3p-tads049.web.app/first-access" 
+          <a href="https://sighc.com.br/first-access" 
              style="display: inline-block; background: linear-gradient(135deg, #1e3a5f, #2d5a8e); color: #ffffff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px;">
             Acessar o Sistema
           </a>
