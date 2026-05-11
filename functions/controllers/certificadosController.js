@@ -1,7 +1,11 @@
 import os from "os";
 import path from "path";
 import fs from "fs/promises";
-import { bucket, db } from "../config/firebase.js";
+import { bucket } from "../config/firebase.js";
+import {
+  criarCertificadoHorasComplementares,
+  registrarUploadSuspeito,
+} from "../models/certificadoModel.js";
 import {
   validarCabecalhoPdf,
   validarTamanho,
@@ -39,7 +43,7 @@ export async function processarCertificado(req, res) {
     if (!tamanhoOk) {
       await bucket.file(storagePath).delete({ ignoreNotFound: true });
 
-      await db.collection("uploads_suspeitos").add({
+      await registrarUploadSuspeito({
         uid,
         nomeArquivo,
         storagePath,
@@ -57,7 +61,7 @@ export async function processarCertificado(req, res) {
     if (!cabecalhoOk) {
       await bucket.file(storagePath).delete({ ignoreNotFound: true });
 
-      await db.collection("uploads_suspeitos").add({
+      await registrarUploadSuspeito({
         uid,
         nomeArquivo,
         storagePath,
@@ -75,7 +79,7 @@ export async function processarCertificado(req, res) {
     if (analise.suspeito) {
       await bucket.file(storagePath).delete({ ignoreNotFound: true });
 
-      await db.collection("uploads_suspeitos").add({
+      await registrarUploadSuspeito({
         uid,
         nomeArquivo,
         storagePath,
@@ -94,7 +98,7 @@ export async function processarCertificado(req, res) {
     await bucket.file(storagePath).move(finalPath);
 
     // Cria o registro oficial no Firestore
-    await db.collection("certificados_horas_complementares").add({
+    await criarCertificadoHorasComplementares({
       uid,
       nomeArquivo,
       storagePath: finalPath,

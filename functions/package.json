@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "adicionar-lendas": "node scripts/adicionarAlunosTads049.js",
+    "adicionar:lendas": "node scripts/adicionarAlunosTads049.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "add": "node scripts/createAdmin.js",

@@ -1,5 +1,6 @@
 // roleController.js
-import { auth_firebase, db } from "../config/firebase.js";
+import { auth_firebase } from "../config/firebase.js";
+import { salvarRoleUsuario } from "../models/usuarioModel.js";
 
 /**
  * Define manualmente o papel (role) de um usuário.
@@ -15,7 +16,7 @@ export async function setUserRole(req, res) {
     }
 
     await auth_firebase.setCustomUserClaims(uid, { role });
-    await db.collection("users").doc(uid).set({ role }, { merge: true });
+    await salvarRoleUsuario(uid, role);
 
     return res.json({ ok: true, uid, role });
   } catch (e) {

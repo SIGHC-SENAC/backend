@@ -1,5 +1,80 @@
-import { db, auth_firebase } from "../config/firebase.js";
+import { auth_firebase } from "../config/firebase.js";
 import { transporter } from "../config/nodemailer.js";
+import { buscarCursoPorId } from "../models/cursoModel.js";
+import { buscarTurmaPorId } from "../models/turmaModel.js";
+import {
+  atualizarUsuario,
+  buscarUsuarioPorId,
+  criarUsuarioComId,
+  deletarUsuario,
+  listarUsuariosPorRole,
+} from "../models/usuarioModel.js";
+import { notificarAlunoAlteracao } from "./notificacoesController.js";
+
+function sameStringArray(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((value, index) => value === right[index]);
+}
+
+async function getCursosSelecionados(cursoIdBody, cursoIdsBody) {
+  const ids = Array.from(new Set(
+    (Array.isArray(cursoIdsBody) && cursoIdsBody.length ? cursoIdsBody : [cursoIdBody]).filter(Boolean)
+  ));
+
+  if (ids.length === 0) {
+    return { error: { status: 400, message: "Informe ao menos um curso para o aluno." } };
+  }
+
+  const cursos = [];
+  for (const id of ids) {
+    const curso = await buscarCursoPorId(id);
+    if (!curso) {
+      return { error: { status: 404, message: `Curso nao encontrado: ${id}` } };
+    }
+
+    cursos.push({
+      id,
+      nome: curso.nome,
+      codigo: curso.codigo,
+      turno: curso.turno,
+    });
+  }
+
+  return { ids, cursos, principal: cursos[0] };
+}
+
+async function getTurmasSelecionadas(turmaIdBody, turmaIdsBody, cursoIdsSelecionados = []) {
+  const ids = Array.from(new Set(
+    (Array.isArray(turmaIdsBody) ? turmaIdsBody : turmaIdBody ? [turmaIdBody] : []).filter(Boolean)
+  ));
+
+  const turmas = [];
+  for (const id of ids) {
+    const turma = await buscarTurmaPorId(id);
+    if (!turma) {
+      return { error: { status: 404, message: `Turma nao encontrada: ${id}` } };
+    }
+
+    if (cursoIdsSelecionados.length > 0 && !cursoIdsSelecionados.includes(turma.cursoId)) {
+      return { error: { status: 400, message: "A turma selecionada nao pertence aos cursos escolhidos." } };
+    }
+
+    turmas.push({
+      id,
+      nome: turma.nome,
+      cursoId: turma.cursoId,
+      cursoNome: turma.cursoNome,
+      cursoCodigo: turma.cursoCodigo,
+      horario: turma.horario,
+      periodoInicio: turma.periodoInicio,
+      periodoFinal: turma.periodoFinal,
+    });
+  }
+
+  return { ids, turmas, principal: turmas[0] || null };
+}
 
 /**
  * Lista alunos cadastrados, permitindo filtragem por curso.
@@ -10,8 +85,7 @@ import { transporter } from "../config/nodemailer.js";
 export async function listarAlunos(req, res) {
   try {
     const { cursoId } = req.query;
-    const snapshot = await db.collection("users").where("role", "==", "aluno").get();
-    let alunos = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let alunos = await listarUsuariosPorRole("aluno");
     if (cursoId) {
       alunos = alunos.filter((aluno) => aluno.cursoId === cursoId || aluno.cursoIds?.includes(cursoId));
     }
@@ -30,30 +104,20 @@ export async function listarAlunos(req, res) {
  */
 export async function criarAluno(req, res) {
   try {
-    const { nome, email, cursoId: cursoIdBody, cursoIds, turmaId } = req.body;
-    const cursoId = cursoIdBody || cursoIds?.[0];
+    const { nome, email, cursoId: cursoIdBody, cursoIds, turmaId, turmaIds } = req.body;
+    const cursosSelecionados = await getCursosSelecionados(cursoIdBody, cursoIds);
+    if (cursosSelecionados.error) {
+      return res.status(cursosSelecionados.error.status).json({ message: cursosSelecionados.error.message });
+    }
+    const cursoId = cursosSelecionados.ids[0];
+    const cursoPrincipal = cursosSelecionados.principal;
     if (!nome || !email) {
       return res.status(400).json({ message: "Campos nome, email e cursoId são obrigatórios." });
     }
 
-    if (!cursoId) {
-      return res.status(400).json({ message: "Informe ao menos um curso para o aluno." });
-    }
-
-    // Verifica se o curso existe
-    const cursoDoc = await db.collection("cursos").doc(cursoId).get();
-    if (!cursoDoc.exists) {
-      return res.status(404).json({ message: "Curso não encontrado." });
-    }
-
-    // Verifica turma se informada
-    let turmaNome = null;
-    if (turmaId) {
-      const turmaDoc = await db.collection("turmas").doc(turmaId).get();
-      if (!turmaDoc.exists) {
-        return res.status(404).json({ message: "Turma não encontrada." });
-      }
-      turmaNome = turmaDoc.data().nome;
+    const turmasSelecionadas = await getTurmasSelecionadas(turmaId, turmaIds, cursosSelecionados.ids);
+    if (turmasSelecionadas.error) {
+      return res.status(turmasSelecionadas.error.status).json({ message: turmasSelecionadas.error.message });
     }
 
     // Cria usuário no Firebase Auth
@@ -72,18 +136,21 @@ export async function criarAluno(req, res) {
       email,
       role: "aluno",
       cursoId,
-      cursoCodigo: cursoDoc.data().codigo,
-      cursoNome: cursoDoc.data().nome,
-      cursoIds: Array.isArray(cursoIds) && cursoIds.length ? cursoIds : [cursoId],
+      cursoCodigo: cursoPrincipal.codigo,
+      cursoNome: cursoPrincipal.nome,
+      cursoIds: cursosSelecionados.ids,
+      cursos: cursosSelecionados.cursos,
       createdAt: Date.now(),
       createdBy: "admin",
     };
-    if (turmaId) {
-      userData.turmaId = turmaId;
-      userData.turmaNome = turmaNome;
+    if (turmasSelecionadas.ids.length > 0) {
+      userData.turmaId = turmasSelecionadas.ids[0];
+      userData.turmaNome = turmasSelecionadas.principal.nome;
+      userData.turmaIds = turmasSelecionadas.ids;
+      userData.turmas = turmasSelecionadas.turmas;
     }
 
-    await db.collection("users").doc(userRecord.uid).set(userData);
+    await criarUsuarioComId(userRecord.uid, userData);
 
     const senhaTemporaria = email.split("@")[0] + "2025!";
 
@@ -151,6 +218,10 @@ await transporter.sendMail({
       nome,
       email,
       cursoId,
+      cursoIds: cursosSelecionados.ids,
+      cursos: cursosSelecionados.cursos,
+      turmaIds: turmasSelecionadas.ids,
+      turmas: turmasSelecionadas.turmas,
       message: "Aluno cadastrado com sucesso.",
     });
   } catch (error) {
@@ -171,49 +242,69 @@ await transporter.sendMail({
 export async function atualizarAluno(req, res) {
   try {
     const { id } = req.params;
-    const { nome, email, cursoId, turmaId } = req.body;
+    const { nome, email, cursoId: cursoIdBody, cursoIds, turmaId, turmaIds } = req.body;
 
-    const docRef = db.collection("users").doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists || doc.data().role !== "aluno") {
+    const alunoAtual = await buscarUsuarioPorId(id);
+    if (!alunoAtual || alunoAtual.role !== "aluno") {
       return res.status(404).json({ message: "Aluno não encontrado." });
     }
 
     const updateData = {};
+    const alteracoes = [];
     if (nome) {
       updateData.nome = nome;
+      if (nome !== alunoAtual.nome) alteracoes.push("nome");
       await auth_firebase.updateUser(id, { displayName: nome });
     }
     if (email) {
       updateData.email = email;
+      if (email !== alunoAtual.email) alteracoes.push("e-mail");
       await auth_firebase.updateUser(id, { email });
     }
 
-    // Se o curso mudar, atualiza as informações denormalizadas
-    if (cursoId && cursoId !== doc.data().cursoId) {
-      const cursoDoc = await db.collection("cursos").doc(cursoId).get();
-      if (!cursoDoc.exists) {
-        return res.status(404).json({ message: "Curso não encontrado." });
+    // Se os cursos forem enviados, atualiza as informacoes denormalizadas.
+    if (cursoIdBody || Array.isArray(cursoIds)) {
+      const cursosSelecionados = await getCursosSelecionados(cursoIdBody, cursoIds);
+      if (cursosSelecionados.error) {
+        return res.status(cursosSelecionados.error.status).json({ message: cursosSelecionados.error.message });
       }
+      const cursoId = cursosSelecionados.ids[0];
+      const cursoPrincipal = cursosSelecionados.principal;
+
       updateData.cursoId = cursoId;
-      updateData.cursoCodigo = cursoDoc.data().codigo;
-      updateData.cursoNome = cursoDoc.data().nome;
+      updateData.cursoCodigo = cursoPrincipal.codigo;
+      updateData.cursoNome = cursoPrincipal.nome;
+      updateData.cursoIds = cursosSelecionados.ids;
+      updateData.cursos = cursosSelecionados.cursos;
+      const cursosAtuais = alunoAtual.cursoIds || (alunoAtual.cursoId ? [alunoAtual.cursoId] : []);
+      if (!sameStringArray(cursosSelecionados.ids, cursosAtuais)) alteracoes.push("cursos");
     }
 
-    // Se a turma mudar, busca o novo nome da turma
-    if (turmaId && turmaId !== doc.data().turmaId) {
-      const turmaDoc = await db.collection("turmas").doc(turmaId).get();
-      if (!turmaDoc.exists) {
-        return res.status(404).json({ message: "Turma não encontrada." });
+    // Se as turmas forem enviadas, salva uma turma por curso selecionado.
+    if (turmaId || Array.isArray(turmaIds)) {
+      const cursoIdsParaValidar = Array.isArray(updateData.cursoIds)
+        ? updateData.cursoIds
+        : alunoAtual.cursoIds || (alunoAtual.cursoId ? [alunoAtual.cursoId] : []);
+      const turmasSelecionadas = await getTurmasSelecionadas(turmaId, turmaIds, cursoIdsParaValidar);
+      if (turmasSelecionadas.error) {
+        return res.status(turmasSelecionadas.error.status).json({ message: turmasSelecionadas.error.message });
       }
-      updateData.turmaId = turmaId;
-      updateData.turmaNome = turmaDoc.data().nome;
+
+      updateData.turmaIds = turmasSelecionadas.ids;
+      updateData.turmas = turmasSelecionadas.turmas;
+      updateData.turmaId = turmasSelecionadas.principal?.id || null;
+      updateData.turmaNome = turmasSelecionadas.principal?.nome || null;
+      const turmasAtuais = alunoAtual.turmaIds || (alunoAtual.turmaId ? [alunoAtual.turmaId] : []);
+      if (!sameStringArray(turmasSelecionadas.ids, turmasAtuais)) alteracoes.push("turmas");
     }
 
     updateData.updatedAt = Date.now();
 
-    await docRef.update(updateData);
-    return res.json({ id, ...doc.data(), ...updateData });
+    await atualizarUsuario(id, updateData);
+    if (alteracoes.length > 0) {
+      await notificarAlunoAlteracao(id, alteracoes);
+    }
+    return res.json({ ...alunoAtual, ...updateData });
   } catch (error) {
     console.error("Erro ao atualizar aluno:", error);
     return res.status(500).json({ message: "Erro ao atualizar aluno." });
@@ -229,15 +320,14 @@ export async function deletarAluno(req, res) {
   try {
     const { id } = req.params;
 
-    const docRef = db.collection("users").doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists || doc.data().role !== "aluno") {
+    const aluno = await buscarUsuarioPorId(id);
+    if (!aluno || aluno.role !== "aluno") {
       return res.status(404).json({ message: "Aluno não encontrado." });
     }
 
     // Remove do Auth e depois do Firestore
     await auth_firebase.deleteUser(id);
-    await docRef.delete();
+    await deletarUsuario(id);
 
     return res.json({ message: "Aluno excluído com sucesso." });
   } catch (error) {

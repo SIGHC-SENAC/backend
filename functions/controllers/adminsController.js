@@ -1,5 +1,13 @@
-import { db, auth_firebase } from "../config/firebase.js";
+import { auth_firebase } from "../config/firebase.js";
 import { transporter } from "../config/nodemailer.js";
+import { buscarCursoPorId } from "../models/cursoModel.js";
+import {
+  atualizarUsuario,
+  buscarUsuarioPorId,
+  criarUsuarioComId,
+  deletarUsuario,
+  listarUsuariosPorRole,
+} from "../models/usuarioModel.js";
 
 async function montarVinculosCursos(cursoIds, cursoId) {
   const ids = Array.isArray(cursoIds) ? cursoIds : cursoId ? [cursoId] : [];
@@ -9,21 +17,17 @@ async function montarVinculosCursos(cursoIds, cursoId) {
     return { error: { status: 400, message: "Informe ao menos um curso para o coordenador." } };
   }
 
-  const cursoDocs = await Promise.all(uniqueIds.map((id) => db.collection("cursos").doc(id).get()));
-  const missingCurso = cursoDocs.find((doc) => !doc.exists);
-  if (missingCurso) {
+  const cursosEncontrados = await Promise.all(uniqueIds.map((id) => buscarCursoPorId(id)));
+  if (cursosEncontrados.some((curso) => !curso)) {
     return { error: { status: 404, message: "Curso nao encontrado." } };
   }
 
-  const cursos = cursoDocs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      nome: data.nome,
-      codigo: data.codigo || null,
-      turno: data.turno || null,
-    };
-  });
+  const cursos = cursosEncontrados.map((curso) => ({
+    id: curso.id,
+    nome: curso.nome,
+    codigo: curso.codigo || null,
+    turno: curso.turno || null,
+  }));
 
   const cursoPrincipal = cursos[0];
   return {
@@ -45,8 +49,7 @@ async function montarVinculosCursos(cursoIds, cursoId) {
  */
 export async function listarAdmins(req, res) {
   try {
-    const snapshot = await db.collection("users").where("role", "==", "admin").get();
-    const admins = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const admins = await listarUsuariosPorRole("admin");
     return res.json(admins);
   } catch (error) {
     console.error("Erro ao listar admins:", error);
@@ -87,7 +90,7 @@ export async function criarAdmin(req, res) {
     await auth_firebase.setCustomUserClaims(userRecord.uid, { role: "admin" });
 
     // Persistência do perfil estendido no Firestore
-    await db.collection("users").doc(userRecord.uid).set({
+    await criarUsuarioComId(userRecord.uid, {
       nome,
       email,
       role: "admin",
@@ -147,13 +150,12 @@ export async function atualizarAdmin(req, res) {
     const { id } = req.params;
     const { nome, email, cursoId, cursoIds } = req.body;
 
-    const docRef = db.collection("users").doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists || doc.data().role !== "admin") {
+    const adminAtual = await buscarUsuarioPorId(id);
+    if (!adminAtual || adminAtual.role !== "admin") {
       return res.status(404).json({ message: "Admin não encontrado." });
     }
 
-    if (req.body.email !== undefined && req.body.email !== doc.data().email) {
+    if (req.body.email !== undefined && req.body.email !== adminAtual.email) {
       return res.status(400).json({ message: "O e-mail do coordenador nao pode ser alterado." });
     }
 
@@ -172,8 +174,8 @@ export async function atualizarAdmin(req, res) {
 
     updateData.atualizadoEm = new Date().toISOString();
 
-    await docRef.update(updateData);
-    return res.json({ id, ...doc.data(), ...updateData });
+    await atualizarUsuario(id, updateData);
+    return res.json({ ...adminAtual, ...updateData });
   } catch (error) {
     console.error("Erro ao atualizar admin:", error);
     return res.status(500).json({ message: "Erro ao atualizar admin." });
@@ -189,14 +191,13 @@ export async function deletarAdmin(req, res) {
   try {
     const { id } = req.params;
 
-    const docRef = db.collection("users").doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists || doc.data().role !== "admin") {
+    const adminAtual = await buscarUsuarioPorId(id);
+    if (!adminAtual || adminAtual.role !== "admin") {
       return res.status(404).json({ message: "Admin não encontrado." });
     }
 
     await auth_firebase.deleteUser(id);
-    await docRef.delete();
+    await deletarUsuario(id);
 
     return res.json({ message: "Admin excluído com sucesso." });
   } catch (error) {

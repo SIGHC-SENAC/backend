@@ -1,6 +1,13 @@
-import { db } from "../config/firebase.js";
+import {
+  atualizarCurso as atualizarCursoModel,
+  buscarCursoPorId,
+  criarCurso as criarCursoModel,
+  deletarCurso as deletarCursoModel,
+  existeCursoComCodigo,
+  gerarCodigoCurso,
+  listarCursosOrdenados,
+} from "../models/cursoModel.js";
 
-const COLLECTION = "cursos";
 const CARGA_HORARIA_COMPLEMENTAR_PADRAO = 100;
 const DEFAULT_REGRAS_ATIVIDADES = [
   {
@@ -68,25 +75,13 @@ function validarRegrasAtividades(regrasAtividades) {
   );
 }
 
-async function gerarCodigoCurso() {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const codigo = String(Math.floor(10000 + Math.random() * 90000));
-    const existing = await db.collection(COLLECTION).where("codigo", "==", codigo).get();
-    if (existing.empty) return codigo;
-  }
-  return String(Date.now()).slice(-5);
-}
-
 /**
  * Retorna todos os cursos cadastrados ordenados por data de criação.
  * @returns {Promise<Object>} Lista de cursos.
  */
 export async function listarCursos(req, res) {
   try {
-    // Busca todos os documentos da coleção, ordenando pelos mais recentes primeiro
-    const snapshot = await db.collection(COLLECTION).orderBy("criadoEm", "desc").get();
-    // Mapeia os documentos para incluir o ID do Firestore no objeto de retorno
-    const cursos = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const cursos = await listarCursosOrdenados();
     return res.json(cursos);
   } catch (error) {
     console.error("Erro ao listar cursos:", error);
@@ -101,12 +96,11 @@ export async function listarCursos(req, res) {
 export async function buscarCurso(req, res) {
   try {
     const { id } = req.params;
-    // Busca o documento específico pelo ID (chave primária)
-    const doc = await db.collection(COLLECTION).doc(id).get();
-    if (!doc.exists) {
+    const curso = await buscarCursoPorId(id);
+    if (!curso) {
       return res.status(404).json({ message: "Curso não encontrado." });
     }
-    return res.json({ id: doc.id, ...doc.data() });
+    return res.json(curso);
   } catch (error) {
     console.error("Erro ao buscar curso:", error);
     return res.status(500).json({ message: "Erro ao buscar curso." });
@@ -127,8 +121,7 @@ export async function criarCurso(req, res) {
     }
 
     // Regra de negócio: O código do curso deve ser único no sistema
-    const existing = await db.collection(COLLECTION).where("codigo", "==", codigo).get();
-    if (!existing.empty) {
+    if (await existeCursoComCodigo(codigo)) {
       return res.status(409).json({ message: "Já existe um curso com este código." });
     }
 
@@ -140,7 +133,7 @@ export async function criarCurso(req, res) {
     const regras = regrasAtividades?.length ? regrasAtividades : cloneDefaultRegras();
 
     // Adiciona o novo curso com metadados de auditoria (criadoEm)
-    const docRef = await db.collection(COLLECTION).add({
+    const id = await criarCursoModel({
       nome,
       codigo,
       turno,
@@ -149,7 +142,7 @@ export async function criarCurso(req, res) {
       criadoEm: new Date().toISOString(),
     });
 
-    return res.status(201).json({ id: docRef.id, nome, codigo, turno, cargaHorariaComplementar: carga, regrasAtividades: regras });
+    return res.status(201).json({ id, nome, codigo, turno, cargaHorariaComplementar: carga, regrasAtividades: regras });
   } catch (error) {
     console.error("Erro ao criar curso:", error);
     return res.status(500).json({ message: "Erro ao criar curso." });
@@ -166,9 +159,8 @@ export async function atualizarCurso(req, res) {
     const { nome, codigo, turno, cargaHorariaComplementar, regrasAtividades } = req.body;
 
     // Obtém referência do documento para verificar existência antes de atualizar
-    const docRef = db.collection(COLLECTION).doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) {
+    const curso = await buscarCursoPorId(id);
+    if (!curso) {
       return res.status(404).json({ message: "Curso não encontrado." });
     }
 
@@ -187,8 +179,8 @@ export async function atualizarCurso(req, res) {
     updateData.atualizadoEm = new Date().toISOString();
 
     // Executa a atualização parcial no Firestore
-    await docRef.update(updateData);
-    return res.json({ id, ...doc.data(), ...updateData });
+    await atualizarCursoModel(id, updateData);
+    return res.json({ ...curso, ...updateData });
   } catch (error) {
     console.error("Erro ao atualizar curso:", error);
     return res.status(500).json({ message: "Erro ao atualizar curso." });
@@ -202,13 +194,12 @@ export async function atualizarCurso(req, res) {
 export async function deletarCurso(req, res) {
   try {
     const { id } = req.params;
-    const docRef = db.collection(COLLECTION).doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) {
+    const curso = await buscarCursoPorId(id);
+    if (!curso) {
       return res.status(404).json({ message: "Curso não encontrado." });
     }
 
-    await docRef.delete();
+    await deletarCursoModel(id);
     return res.json({ message: "Curso excluído com sucesso." });
   } catch (error) {
     console.error("Erro ao deletar curso:", error);

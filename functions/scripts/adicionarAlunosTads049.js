@@ -2,7 +2,7 @@ import { auth_firebase, db } from "../config/firebase.js";
 import { transporter } from "../config/nodemailer.js";
 
 const CURSO_ID = "joTa1aQkKBd9inyt6zqZ";
-const TURMA_ID = "cerTNSGqP0amjxuXGsJ2";
+const TURMA_ID = "cerTNSGqP0amjxuxGsJ2";
 const APP_URL = "https://sighc.com.br";
 const DELAY_EMAIL_MS = Number(3000);
 
