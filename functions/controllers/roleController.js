@@ -10,8 +10,8 @@ import { salvarRoleUsuario } from "../models/usuarioModel.js";
  */
 export async function setUserRole(req, res) {
   try {
-    const { uid, role } = req.body; // role: "admin" | "aluno" | "superAdmin"
-    if (!uid || !["admin", "aluno", "superAdmin"].includes(role)) {
+    const { uid, role } = req.body; // role: "admin" | "aluno" | "superAdmin" | "coordenador"
+    if (!uid || !["admin", "aluno", "superAdmin", "coordenador"].includes(role)) {
       return res.status(400).json({ error: "uid e role válidos são obrigatórios" });
     }
 

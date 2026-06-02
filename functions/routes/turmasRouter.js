@@ -1,5 +1,5 @@
 import express from "express";
-import { requireSuperAdmin } from "../middlewares/authMiddleware.js";
+import { requireSuperAdmin, requireCoordenador } from "../middlewares/authMiddleware.js";
 import { listarTurmas, buscarTurma, criarTurma, atualizarTurma, deletarTurma } from "../controllers/turmasController.js";
 
 const router = express.Router();
@@ -10,9 +10,9 @@ const router = express.Router();
  */
 
 // Lista turmas (pode ser filtrado por cursoId via query string)
-router.get("/", ...requireSuperAdmin, listarTurmas);
+router.get("/", ...requireCoordenador, listarTurmas);
 // Obtém dados de uma turma específica
-router.get("/:id", ...requireSuperAdmin, buscarTurma);
+router.get("/:id", ...requireCoordenador, buscarTurma);
 // Cadastra uma nova turma associada a um curso existente
 router.post("/", ...requireSuperAdmin, criarTurma);
 // Atualiza os dados de uma turma (horários, períodos, etc)

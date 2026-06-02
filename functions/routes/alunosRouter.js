@@ -1,15 +1,16 @@
 import express from "express";
 import { listarAlunos, criarAluno, atualizarAluno, deletarAluno } from "../controllers/alunosController.js";
-import { requireSuperAdmin } from "../middlewares/authMiddleware.js";
+import { requireSuperAdmin, requireCoordenador } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 /**
  * Rotas para gerenciamento de alunos.
  * Permite a gestão completa de perfis acadêmicos por Super Admins.
+ * Coordenadores podem listar alunos dos seus cursos.
  */
 // Rota para listar alunos (aceita 'cursoId' como query parameter para filtragem)
-router.get("/", ...requireSuperAdmin, listarAlunos);
+router.get("/", ...requireCoordenador, listarAlunos);
 // Rota para cadastrar um novo aluno, vinculando-o a um curso e turma específicos
 router.post("/", ...requireSuperAdmin, criarAluno);
 // Rota para atualizar os dados de um aluno (nome, curso, turma, etc)

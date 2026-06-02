@@ -47,4 +47,5 @@ export function requireRole(...allowedRoles) {
 // Atalhos para combinações comuns de middleware de autenticação e autorização
 export const requireAdmin = [requireAuth, requireRole("admin", "superAdmin")];
 export const requireSuperAdmin = [requireAuth, requireRole("superAdmin")];
+export const requireCoordenador = [requireAuth, requireRole("coordenador", "admin", "superAdmin")];
 export const requireAluno = [requireAuth, requireRole("aluno")];
