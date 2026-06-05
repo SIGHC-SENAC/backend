@@ -1,6 +1,7 @@
 import os from "os";
 import path from "path";
 import fs from "fs/promises";
+import { google } from "googleapis";
 import { db, bucket } from "../config/firebase.js";
 import {
   criarCertificadoHorasComplementares,
@@ -261,5 +262,80 @@ export async function processarCertificado(req, res) {
         await fs.unlink(tempFilePath);
       } catch {}
     }
+  }
+}
+
+/**
+ * Executa OCR em um PDF armazenado no Cloud Storage via Google Cloud Vision API.
+ * O arquivo deve estar em certificados_temp/ (ainda não processado).
+ *
+ * @param {Object} req - Body: { storagePath }
+ * @returns {Promise<Object>} JSON com { text } extraído do documento.
+ */
+export async function extrairTextoOcr(req, res) {
+  const { storagePath } = req.body;
+
+  if (!storagePath) {
+    return res.status(400).json({ error: "storagePath é obrigatório" });
+  }
+
+  if (!storagePath.startsWith("certificados_temp/")) {
+    return res.status(400).json({ error: "caminho inválido" });
+  }
+
+  try {
+    const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
+    if (!b64) throw new Error("Credenciais do serviço não configuradas");
+
+    const serviceAccount = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+
+    const authClient = new google.auth.JWT({
+      email: serviceAccount.client_email,
+      key: serviceAccount.private_key,
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    });
+
+    const tokenResponse = await authClient.getAccessToken();
+    const accessToken = tokenResponse.token;
+
+    const gcsUri = `gs://${bucket.name}/${storagePath}`;
+
+    const visionRes = await fetch("https://vision.googleapis.com/v1/files:annotate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            inputConfig: {
+              gcsSource: { uri: gcsUri },
+              mimeType: "application/pdf",
+            },
+            features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+          },
+        ],
+      }),
+    });
+
+    if (!visionRes.ok) {
+      const errData = await visionRes.json();
+      console.error("Vision API error:", errData);
+      return res.status(500).json({ error: "Erro na API de OCR" });
+    }
+
+    const data = await visionRes.json();
+
+    const text = (data.responses?.[0]?.responses ?? [])
+      .map((r) => r.fullTextAnnotation?.text || "")
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+
+    return res.json({ text });
+  } catch (error) {
+    console.error("Erro ao executar OCR:", error);
+    return res.status(500).json({ error: "Erro ao processar OCR" });
   }
 }
