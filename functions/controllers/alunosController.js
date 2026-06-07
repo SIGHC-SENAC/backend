@@ -9,6 +9,12 @@ import {
   deletarUsuario,
   listarUsuariosPorRole,
 } from "../models/usuarioModel.js";
+
+function getCoordenadorCursoIds(coordenador) {
+  return coordenador?.cursoIds?.length
+    ? coordenador.cursoIds
+    : coordenador?.cursoId ? [coordenador.cursoId] : [];
+}
 import { notificarAlunoAlteracao } from "./notificacoesController.js";
 
 function sameStringArray(a = [], b = []) {
@@ -84,10 +90,28 @@ async function getTurmasSelecionadas(turmaIdBody, turmaIdsBody, cursoIdsSelecion
 export async function listarAlunos(req, res) {
   try {
     const { cursoId } = req.query;
+    const { role, uid } = req.user;
+
     let alunos = await listarUsuariosPorRole("aluno");
-    if (cursoId) {
+
+    if (role === "admin") {
+      const coordenador = await buscarUsuarioPorId(uid);
+      const coordCursoIds = getCoordenadorCursoIds(coordenador);
+
+      if (coordCursoIds.length === 0) return res.json([]);
+
+      if (cursoId && !coordCursoIds.includes(cursoId)) {
+        return res.status(403).json({ message: "Acesso negado a este curso." });
+      }
+
+      const filterIds = cursoId ? [cursoId] : coordCursoIds;
+      alunos = alunos.filter((aluno) =>
+        filterIds.some((id) => aluno.cursoId === id || aluno.cursoIds?.includes(id))
+      );
+    } else if (cursoId) {
       alunos = alunos.filter((aluno) => aluno.cursoId === cursoId || aluno.cursoIds?.includes(cursoId));
     }
+
     return res.json(alunos);
   } catch (error) {
     console.error("Erro ao listar alunos:", error);
