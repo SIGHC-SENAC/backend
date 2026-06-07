@@ -26,7 +26,6 @@ async function montarVinculosCursos(cursoIds, cursoId) {
     id: curso.id,
     nome: curso.nome,
     codigo: curso.codigo || null,
-    turno: curso.turno || null,
   }));
 
   const cursoPrincipal = cursos[0];

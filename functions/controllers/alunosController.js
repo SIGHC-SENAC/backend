@@ -38,7 +38,6 @@ async function getCursosSelecionados(cursoIdBody, cursoIdsBody) {
       id,
       nome: curso.nome,
       codigo: curso.codigo,
-      turno: curso.turno,
     });
   }
 

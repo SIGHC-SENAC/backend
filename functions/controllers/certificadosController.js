@@ -266,6 +266,93 @@ export async function processarCertificado(req, res) {
 }
 
 /**
+ * Analisa o texto OCR de um certificado via Gemini 2.5 Flash e sugere a categoria de atividade.
+ *
+ * @param {Object} req - Body: { ocrText, regrasAtividades }
+ * @returns {Promise<Object>} JSON com { grupoId, categoriaId } sugeridos.
+ */
+export async function analisarComIA(req, res) {
+  const { ocrText, regrasAtividades } = req.body;
+
+  if (!ocrText || !Array.isArray(regrasAtividades) || regrasAtividades.length === 0) {
+    return res.status(400).json({ error: "ocrText e regrasAtividades são obrigatórios" });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ error: "Análise com IA não configurada" });
+  }
+
+  // Flatten to a minimal list to keep the prompt concise
+  const atividadesList = regrasAtividades.flatMap((grupo) =>
+    (grupo.atividades || []).map((ativ) => ({
+      grupoId: grupo.id,
+      grupoLabel: grupo.label,
+      categoriaId: ativ.id,
+      descricao: ativ.descricao,
+    }))
+  );
+
+  const prompt = `Você é um classificador de certificados de horas complementares universitárias.
+
+Analise o texto do certificado abaixo e escolha a categoria mais adequada da lista.
+
+TEXTO DO CERTIFICADO:
+---
+${ocrText.slice(0, 3000)}
+---
+
+CATEGORIAS DISPONÍVEIS:
+${JSON.stringify(atividadesList, null, 2)}
+
+Responda SOMENTE com JSON válido neste exato formato (sem markdown, sem explicações):
+{"grupoId":"<id do grupo>","categoriaId":"<id da categoria>"}`;
+
+  try {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 },
+        }),
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const err = await geminiRes.json().catch(() => ({}));
+      console.error("Gemini API error:", err);
+      return res.status(500).json({ error: "Erro na API Gemini" });
+    }
+
+    const data = await geminiRes.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    // Extract JSON from response (may be wrapped in markdown code blocks)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.json({ grupoId: null, categoriaId: null });
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Validate that the returned IDs actually exist in regrasAtividades
+    const grupo = regrasAtividades.find((g) => g.id === parsed.grupoId);
+    if (!grupo) return res.json({ grupoId: null, categoriaId: null });
+
+    const atividade = (grupo.atividades || []).find((a) => a.id === parsed.categoriaId);
+    if (!atividade) return res.json({ grupoId: parsed.grupoId, categoriaId: null });
+
+    return res.json({ grupoId: parsed.grupoId, categoriaId: parsed.categoriaId });
+  } catch (error) {
+    console.error("Erro ao analisar com IA:", error);
+    return res.status(500).json({ error: "Erro ao processar análise com IA" });
+  }
+}
+
+/**
  * Executa OCR em um PDF armazenado no Cloud Storage via Google Cloud Vision API.
  * O arquivo deve estar em certificados_temp/ (ainda não processado).
  *

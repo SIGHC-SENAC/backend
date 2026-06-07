@@ -110,14 +110,14 @@ export async function buscarCurso(req, res) {
 /**
  * Cria um novo curso.
  * Valida se o código do curso é único antes de salvar.
- * @param {Object} req - Body com nome, codigo, turno e carga horária.
+ * @param {Object} req - Body com nome, codigo e carga horária.
  */
 export async function criarCurso(req, res) {
   try {
-    const { nome, codigo: codigoBody, turno, cargaHorariaComplementar, regrasAtividades } = req.body;
+    const { nome, codigo: codigoBody, cargaHorariaComplementar, regrasAtividades } = req.body;
     const codigo = codigoBody || await gerarCodigoCurso();
-    if (!nome || !turno) {
-      return res.status(400).json({ message: "Campos nome, codigo, turno e cargaHorariaComplementar são obrigatórios." });
+    if (!nome) {
+      return res.status(400).json({ message: "Campo nome é obrigatório." });
     }
 
     // Regra de negócio: O código do curso deve ser único no sistema
@@ -136,13 +136,12 @@ export async function criarCurso(req, res) {
     const id = await criarCursoModel({
       nome,
       codigo,
-      turno,
       cargaHorariaComplementar: carga,
       regrasAtividades: regras,
       criadoEm: new Date().toISOString(),
     });
 
-    return res.status(201).json({ id, nome, codigo, turno, cargaHorariaComplementar: carga, regrasAtividades: regras });
+    return res.status(201).json({ id, nome, codigo, cargaHorariaComplementar: carga, regrasAtividades: regras });
   } catch (error) {
     console.error("Erro ao criar curso:", error);
     return res.status(500).json({ message: "Erro ao criar curso." });
@@ -156,7 +155,7 @@ export async function criarCurso(req, res) {
 export async function atualizarCurso(req, res) {
   try {
     const { id } = req.params;
-    const { nome, codigo, turno, cargaHorariaComplementar, regrasAtividades } = req.body;
+    const { nome, codigo, cargaHorariaComplementar, regrasAtividades } = req.body;
 
     // Obtém referência do documento para verificar existência antes de atualizar
     const curso = await buscarCursoPorId(id);
@@ -168,7 +167,6 @@ export async function atualizarCurso(req, res) {
     const updateData = {};
     if (nome) updateData.nome = nome;
     if (codigo) updateData.codigo = codigo;
-    if (turno) updateData.turno = turno;
     if (cargaHorariaComplementar) updateData.cargaHorariaComplementar = Number(cargaHorariaComplementar);
     if (regrasAtividades !== undefined) {
       if (!validarRegrasAtividades(regrasAtividades)) {
