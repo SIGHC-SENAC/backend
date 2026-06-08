@@ -6,13 +6,6 @@ import {
   deletarTurma as deletarTurmaModel,
   listarTurmasOrdenadas,
 } from "../models/turmaModel.js";
-import { buscarUsuarioPorId } from "../models/usuarioModel.js";
-
-function getCoordenadorCursoIds(coordenador) {
-  return coordenador?.cursoIds?.length
-    ? coordenador.cursoIds
-    : coordenador?.cursoId ? [coordenador.cursoId] : [];
-}
 
 /**
  * Lista turmas cadastradas.
@@ -21,19 +14,6 @@ function getCoordenadorCursoIds(coordenador) {
 export async function listarTurmas(req, res) {
   try {
     const { cursoId } = req.query;
-    const { role, uid } = req.user;
-
-    if (role === "admin") {
-      const coordenador = await buscarUsuarioPorId(uid);
-      const coordCursoIds = getCoordenadorCursoIds(coordenador);
-
-      if (coordCursoIds.length === 0) return res.json([]);
-
-      if (cursoId && !coordCursoIds.includes(cursoId)) {
-        return res.status(403).json({ message: "Acesso negado a este curso." });
-      }
-    }
-
     const turmas = await listarTurmasOrdenadas(cursoId);
     return res.json(turmas);
   } catch (error) {

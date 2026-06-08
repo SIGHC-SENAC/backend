@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e \"const p = require\\('./node_modules/firebase-functions/package.json'\\); console.log\\('firebase-functions:', p.version\\)\")",
+      "Bash(firebase --version)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(where firebase *)",
+      "Bash(grep -r \"Cannot set CPU\" \"C:\\\\Users\\\\joaov\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\firebase-tools\\\\lib\" --include=\"*.js\" -l 2>&1)",
+      "Read(//c/Users/joaov/AppData/Roaming/npm/node_modules/firebase-tools/lib/**)"
+    ]
+  }
+}
