@@ -7,6 +7,7 @@ import cursosRoutes from "./routes/cursosRouter.js";
 import certificadosRoutes from "./routes/certificadosRouter.js";
 import adminsRoutes from "./routes/adminsRouter.js";
 import turmasRoutes from "./routes/turmasRouter.js";
+import chatRoutes from "./routes/chatRouter.js";
 import cors from "cors";
 
 const router = express();
@@ -21,6 +22,7 @@ const apiServices = [
   { name: "Certificados", path: "/certificados", status: "online" },
   { name: "Administradores", path: "/admins", status: "online" },
   { name: "Turmas", path: "/turmas", status: "online" },
+  { name: "Chat IA", path: "/chat", status: "online" },
 ];
 
 // rotas
@@ -31,6 +33,7 @@ router.use("/cursos", cursosRoutes);
 router.use("/certificados", certificadosRoutes);
 router.use("/admins", adminsRoutes);
 router.use("/turmas", turmasRoutes);
+router.use("/chat", chatRoutes);
 
 router.get("/", (req, res) => {
   const generatedAt = new Date().toLocaleString("pt-BR", {
