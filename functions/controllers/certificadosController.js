@@ -157,7 +157,12 @@ export async function listarCertificados(req, res) {
  * @returns {Promise<Object>} Resposta JSON com o status do processamento.
  */
 export async function processarCertificado(req, res) {
-  const { uid, storagePath, nomeArquivo } = req.body;
+  const {
+    uid, storagePath, nomeArquivo,
+    categoriaId, categoriaNome,
+    cursoId, cursoNome, cursoCodigo,
+    nomeAluno, emailAluno, observacaoAluno,
+  } = req.body;
 
   if (!uid || !storagePath || !nomeArquivo) {
     return res.status(400).json({
@@ -238,6 +243,14 @@ export async function processarCertificado(req, res) {
     await criarCertificadoHorasComplementares({
       uid,
       nomeArquivo,
+      nomeAluno: nomeAluno || "",
+      emailAluno: emailAluno || "",
+      observacaoAluno: observacaoAluno || "",
+      categoriaId: categoriaId || null,
+      categoriaNome: categoriaNome || null,
+      cursoId: cursoId || null,
+      cursoNome: cursoNome || null,
+      cursoCodigo: cursoCodigo || null,
       storagePath: finalPath,
       status: "pendente",
       analiseSeguranca: "aprovado",
@@ -323,8 +336,9 @@ Responda SOMENTE com JSON válido neste exato formato (sem markdown, sem explica
 
     if (!geminiRes.ok) {
       const err = await geminiRes.json().catch(() => ({}));
-      console.error("Gemini API error:", err);
-      return res.status(500).json({ error: "Erro na API Gemini" });
+      console.error("Gemini API error:", JSON.stringify(err));
+      const detail = err?.error?.message || err?.error?.status || geminiRes.status;
+      return res.status(500).json({ error: "Erro na API Gemini", detail });
     }
 
     const data = await geminiRes.json();
@@ -407,12 +421,19 @@ export async function extrairTextoOcr(req, res) {
     });
 
     if (!visionRes.ok) {
-      const errData = await visionRes.json();
-      console.error("Vision API error:", errData);
+      const errData = await visionRes.json().catch(() => ({}));
+      console.error("Vision API HTTP error:", JSON.stringify(errData));
       return res.status(500).json({ error: "Erro na API de OCR" });
     }
 
     const data = await visionRes.json();
+
+    // A Vision API pode retornar HTTP 200 com erro embutido no corpo
+    const embeddedError = data.responses?.[0]?.error;
+    if (embeddedError) {
+      console.error("Vision API embedded error:", JSON.stringify(embeddedError));
+      return res.status(500).json({ error: "Erro ao processar documento no OCR" });
+    }
 
     const text = (data.responses?.[0]?.responses ?? [])
       .map((r) => r.fullTextAnnotation?.text || "")
